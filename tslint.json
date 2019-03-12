@@ -1,18 +1,61 @@
 {
-  "defaultSeverity": "error",
-  "extends": ["tslint:recommended"],
-  "jsRules": {
-    "no-unused-expression": true
-  },
-  "rules": {
-    "quotemark": [true, "single"],
-    "member-access": [false],
-    "ordered-imports": [false],
-    "max-line-length": [true, 150],
-    "member-ordering": [false],
-    "interface-name": [false],
-    "arrow-parens": false,
-    "object-literal-sort-keys": false
-  },
-  "rulesDirectory": []
+    "defaultSeverity": "error",
+    "extends": ["tslint:recommended", "tslint-config-prettier"],
+    "jsRules": {
+        "no-unused-expression": true
+    },
+    "rules": {
+        "member-access": [false],
+        "ordered-imports": [false],
+        "member-ordering": [false],
+        "interface-name": [false],
+        "arrow-parens": false,
+        "object-literal-sort-keys": false,
+        "no-null-keyword": true,
+        "no-any": true,
+        "prefer-readonly": true,
+        "no-inferrable-types": true,
+        "no-submodule-imports": false,
+        "no-implicit-dependencies": false,
+        "max-classes-per-file": [false, 5, "exclude-class-expressions"],
+        "jsdoc-format": false,
+        "arrow-return-shorthand": true,
+        "callable-types": true,
+        "class-name": true,
+        "comment-format": [true, "check-space"],
+        "curly": true,
+        "deprecation": {
+            "severity": "warn"
+        },
+        "forin": true,
+        "import-blacklist": [true, "rxjs/Rx"],
+        "interface-over-type-literal": true,
+        "label-position": true,
+        "no-arg": true,
+        "no-bitwise": true,
+        "no-console": [true, "debug", "info", "time", "timeEnd", "trace"],
+        "no-construct": true,
+        "no-debugger": true,
+        "no-duplicate-super": true,
+        "no-empty": false,
+        "no-empty-interface": true,
+        "no-eval": true,
+        "no-misused-new": true,
+        "no-non-null-assertion": true,
+        "no-redundant-jsdoc": true,
+        "no-shadowed-variable": true,
+        "no-string-literal": false,
+        "no-string-throw": true,
+        "no-switch-case-fall-through": true,
+        "no-unnecessary-initializer": true,
+        "no-unused-expression": true,
+        "no-use-before-declare": true,
+        "no-var-keyword": true,
+        "prefer-const": true,
+        "radix": true,
+        "triple-equals": [true, "allow-null-check"],
+        "unified-signatures": true,
+        "variable-name": false
+    },
+    "rulesDirectory": []
 }
