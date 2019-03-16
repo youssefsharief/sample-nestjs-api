@@ -12,6 +12,7 @@
         "start:prod": "node -r dotenv/config dist/main.js",
         "lint": "tslint -p tsconfig.json -c tslint.json",
         "t": "jest --setupFiles dotenv/config",
+        "t:all": "npm run t -- --config ./jest-config.js --runInBand --bail",
         "t:u": "npm run t -- --config ./test/unit-tests/jest-unit.js",
         "t:i": "npm run t -- --config ./test/integration/jest-integration.js --runInBand --bail",
         "t:u:w": "npm run t:u -- --watch",
