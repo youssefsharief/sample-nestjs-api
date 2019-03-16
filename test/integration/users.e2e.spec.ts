@@ -8,6 +8,7 @@ import { UsersDbTestingOperations } from './db-operations';
 import { hashModule } from '../../src/common/auth/hash';
 import { supertestPromise, authHeaders } from './util-test';
 import * as mongoose from 'mongoose';
+import { logger } from '../../src/infrastructure/logger';
 
 const manager = {
     name: 'a manger name',
@@ -81,22 +82,21 @@ describe('E2E users', () => {
                         .expect(HttpStatus.OK),
                 );
                 expect(res.body.user).toBeTruthy();
-                expect(res.body.user).toBeTruthy();
                 expect(res.body.user.email).toBe(regularUser.email);
                 expect(res.body.user.role).toBe('regular');
                 expect(res.body.user.password).toBeFalsy();
-                expect(res.body.user.name).toBeTruthy();
+                expect(res.body.user.name).toBe(regularUser.name);
                 expect(res.body.user._id).toBeTruthy();
                 expect(res.body.token).toBeTruthy();
             });
         });
-    });
 
-    describe('wrong credentials', () => {
-        it('should not login with wrong credentials', async () => {
-            await supertestPromise(() =>
-                api.login({ email: 'randomEmail@test33.com', password: '454ds65ds8ew' }).expect(HttpStatus.UNAUTHORIZED),
-            );
+        describe('wrong credentials', () => {
+            it('should not login with wrong credentials', async () => {
+                await supertestPromise(() =>
+                    api.login({ email: 'randomEmail@test33.com', password: '454ds65ds8ew' }).expect(HttpStatus.UNAUTHORIZED),
+                );
+            });
         });
     });
 
@@ -112,69 +112,94 @@ describe('E2E users', () => {
         it('should not work if token is not supplied', async () => {
             await supertestPromise(() => api.protected('').expect(HttpStatus.FORBIDDEN));
         });
+    });
 
-        describe('getting User details', () => {
-            it('should get user details successfully as a regular user', async () => {
+    describe('getting User details', () => {
+        it('should get user details successfully as a regular user', async () => {
+            const res = await supertestPromise(() =>
+                api.getUserDetails(regularUserId, authHeaders(regularUserToken)).expect(HttpStatus.OK),
+            );
+            expect(res).toBeTruthy();
+            expect(res.body.name).toBe(regularUser.name);
+            expect(res.body.email).toBe(regularUser.email);
+            expect(res.body.role).toBe('regular');
+        });
+    });
+
+    describe('upgrading role', () => {
+        it('regular user could not upgrade him/herself', async () => {
+            await supertestPromise(() => api.updateRole(regularUserId, authHeaders(regularUserToken)).expect(HttpStatus.FORBIDDEN));
+        });
+
+        it('manager could upgrade a regular user', async () => {
+            await supertestPromise(() => api.updateRole(regularUserId, authHeaders(managerToken)).expect(HttpStatus.OK));
+            const res = await supertestPromise(() => api.login(regularUser).expect(HttpStatus.OK));
+            expect(res.body.user.role).toBe(ROLES.manager);
+            expect(res.body.user.email).toBe(regularUser.email);
+            expect(res.body.user.name).toBe(regularUser.name);
+        });
+    });
+
+    describe('update data', () => {
+        it('regular user could update his/her own data', async () => {
+            const newEmail = 'new_email@test.com';
+            const newName = 'a new name';
+            await supertestPromise(() =>
+                api.updateUserInfo(regularUserId, authHeaders(regularUserToken), { name: newName, email: newEmail }).expect(HttpStatus.OK),
+            );
+            const res = await supertestPromise(() =>
+                api.getUserDetails(regularUserId, authHeaders(regularUserToken)).expect(HttpStatus.OK),
+            );
+            expect(res.body.email).toBe(newEmail);
+            expect(res.body.name).toBe(newName);
+            expect(res.body.role).toBe(ROLES.manager);
+        });
+
+        describe('data validation', () => {
+            it('should throw error for wrong email', async () => {
                 const res = await supertestPromise(() =>
-                    api.getUserDetails(regularUserId, authHeaders(regularUserToken)).expect(HttpStatus.OK),
-                );
-                expect(res).toBeTruthy();
-                expect(res.body.name).toBe(regularUser.name);
-                expect(res.body.role).toBe('regular');
-            });
-        });
-
-        describe('upgrading role', () => {
-            it('regular user could not upgrade him/herself', async () => {
-                await supertestPromise(() => api.updateRole(regularUserId, authHeaders(regularUserToken)).expect(HttpStatus.FORBIDDEN));
-            });
-
-            it('manager could upgrade a regular user', async () => {
-                await supertestPromise(() => api.updateRole(regularUserId, authHeaders(managerToken)).expect(HttpStatus.OK));
-                const res2 = await supertestPromise(() => api.login(regularUser).expect(HttpStatus.OK));
-                expect(res2.body.user.role).toBe(ROLES.manager);
-            });
-        });
-
-        describe('update data', () => {
-            it('regular user could update his/her own data', async () => {
-                const newEmail = 'new_email@test.com';
-                const newName = 'a new name';
-                await supertestPromise(() =>
-                    api
-                        .updateUserInfo(regularUserId, authHeaders(regularUserToken), { name: newName, email: newEmail })
-                        .expect(HttpStatus.OK),
-                );
-                const res2 = await supertestPromise(() =>
-                    api.getUserDetails(regularUserId, authHeaders(regularUserToken)).expect(HttpStatus.OK),
-                );
-                expect(res2.body.email).toBe(newEmail);
-                expect(res2.body.name).toBe(newName);
-            });
-
-            it('data validation should work', async () => {
-                await supertestPromise(() =>
                     api
                         .updateUserInfo(regularUserId, authHeaders(regularUserToken), { name: 'a new name', email: 'not an email' })
                         .expect(HttpStatus.BAD_REQUEST),
                 );
+                expect(res.body.message.length).toBe(1);
+                expect(res.body.message[0].property).toBe('email');
             });
 
-            it('manager could update his/her own data', async () => {
-                await supertestPromise(() =>
+            it('should throw error for wrong name', async () => {
+                const res = await supertestPromise(() =>
                     api
-                        .updateUserInfo(managerId, authHeaders(managerToken), { name: 'a new name', email: 'a_new_manager_email@test.com' })
-                        .expect(HttpStatus.OK),
+                        .updateUserInfo(regularUserId, authHeaders(regularUserToken), { name: 'a', email: 'an_email@test.com' })
+                        .expect(HttpStatus.BAD_REQUEST),
                 );
+                expect(res.body.message.length).toBe(1);
+                expect(res.body.message[0].property).toBe('name');
             });
 
-            it("manager could not update another user's data ", async () => {
-                await supertestPromise(() =>
+            it('should send error messages for all unvalid data', async () => {
+                const res = await supertestPromise(() =>
                     api
-                        .updateUserInfo(regularUserId, authHeaders(managerToken), { name: 'a new name', email: 'a_new_email.com' })
-                        .expect(HttpStatus.FORBIDDEN),
+                        .updateUserInfo(regularUserId, authHeaders(regularUserToken), { name: 'a', email: 'not an email' })
+                        .expect(HttpStatus.BAD_REQUEST),
                 );
+                expect(res.body.message.length).toBe(2);
             });
+        });
+
+        it('manager could update his/her own data', async () => {
+            const res = await supertestPromise(() =>
+                api
+                    .updateUserInfo(managerId, authHeaders(managerToken), { name: 'a new name', email: 'a_new_manager_email@test.com' })
+                    .expect(HttpStatus.OK),
+            );
+        });
+
+        it("manager could not update another user's data ", async () => {
+            await supertestPromise(() =>
+                api
+                    .updateUserInfo(regularUserId, authHeaders(managerToken), { name: 'a new name', email: 'a_new_email.com' })
+                    .expect(HttpStatus.FORBIDDEN),
+            );
         });
     });
 
@@ -182,27 +207,30 @@ describe('E2E users', () => {
         it('should not allow duplicate emails', async () => {
             await supertestPromise(() => api.signup({ ...regularUser, email: 'new_email@test.com' }).expect(HttpStatus.CONFLICT));
         });
-        it('should respond by error message in case password have no letter', async () => {
-            await supertestPromise(() => api.signup({ ...regularUser, password: '12236565' }).expect(HttpStatus.BAD_REQUEST));
-        });
 
-        it('should respond by error message in case password have no number', async () => {
-            await supertestPromise(() => api.signup({ ...regularUser, password: 'herogymisthe' }).expect(HttpStatus.BAD_REQUEST));
-        });
-        it('should respond by error message in case password is not lengthy enough', async () => {
-            await supertestPromise(() => api.signup({ ...regularUser, password: 'i5o' }).expect(HttpStatus.BAD_REQUEST));
-        });
-        it('should respond by error message in case name is not provided', async () => {
-            await supertestPromise(() => api.signup({ ...regularUser, name: '' }).expect(HttpStatus.BAD_REQUEST));
-        });
-        it('should respond by error message in case email is not provided', async () => {
-            await supertestPromise(() => api.signup({ ...regularUser, email: '' }).expect(HttpStatus.BAD_REQUEST));
-        });
-        it('should respond by error message in case password is not provided', async () => {
-            await supertestPromise(() => api.signup({ ...regularUser, password: '' }).expect(HttpStatus.BAD_REQUEST));
-        });
-        it('should respond by error message in case email do not have the appropriate format', async () => {
-            await supertestPromise(() => api.signup({ ...regularUser, email: 'thisIsNOTanEmail' }).expect(HttpStatus.BAD_REQUEST));
+        describe('data validation', () => {
+            it('should respond by error message in case password have no letter', async () => {
+                await supertestPromise(() => api.signup({ ...regularUser, password: '12236565' }).expect(HttpStatus.BAD_REQUEST));
+            });
+
+            it('should respond by error message in case password have no number', async () => {
+                await supertestPromise(() => api.signup({ ...regularUser, password: 'herogymisthe' }).expect(HttpStatus.BAD_REQUEST));
+            });
+            it('should respond by error message in case password is not lengthy enough', async () => {
+                await supertestPromise(() => api.signup({ ...regularUser, password: 'i5o' }).expect(HttpStatus.BAD_REQUEST));
+            });
+            it('should respond by error message in case name is not provided', async () => {
+                await supertestPromise(() => api.signup({ ...regularUser, name: '' }).expect(HttpStatus.BAD_REQUEST));
+            });
+            it('should respond by error message in case email is not provided', async () => {
+                await supertestPromise(() => api.signup({ ...regularUser, email: '' }).expect(HttpStatus.BAD_REQUEST));
+            });
+            it('should respond by error message in case password is not provided', async () => {
+                await supertestPromise(() => api.signup({ ...regularUser, password: '' }).expect(HttpStatus.BAD_REQUEST));
+            });
+            it('should respond by error message in case email do not have the appropriate format', async () => {
+                await supertestPromise(() => api.signup({ ...regularUser, email: 'thisIsNOTanEmail' }).expect(HttpStatus.BAD_REQUEST));
+            });
         });
     });
 });
