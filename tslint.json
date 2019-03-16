@@ -5,14 +5,15 @@
         "no-unused-expression": true
     },
     "rules": {
+        "no-floating-promises": true,
         "member-access": [false],
         "ordered-imports": [false],
         "member-ordering": [false],
         "interface-name": [false],
         "arrow-parens": false,
         "object-literal-sort-keys": false,
-        "no-null-keyword": true,
-        "no-any": true,
+        "no-null-keyword": false,
+        "no-any": false,
         "prefer-readonly": true,
         "no-inferrable-types": true,
         "no-submodule-imports": false,

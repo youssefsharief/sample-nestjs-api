@@ -1,0 +1,54 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`AppController getUserInfo should return userInfo without password 1`] = `
+Object {
+  "_id": "as454g",
+  "name": "A clear name",
+  "password": undefined,
+  "role": "manager",
+}
+`;
+
+exports[`AppController getUserInfo user does not exist should return 404 1`] = `
+Object {
+  "error": "Not Found",
+  "message": "User does not exist",
+  "statusCode": 404,
+}
+`;
+
+exports[`AppController login correct credentials should return token and user object with role, name, and email 1`] = `
+Object {
+  "_id": "1",
+  "email": "aa@test.com",
+  "name": "a name",
+  "password": undefined,
+  "role": "user",
+}
+`;
+
+exports[`AppController login user does not exist should throw unauthorized exception without letting the user know that the user do not exist 1`] = `
+Object {
+  "error": "Unauthorized",
+  "message": "Email or/and password are wrong",
+  "statusCode": 401,
+}
+`;
+
+exports[`AppController login wrong credentials should throw unauthorized exception 1`] = `
+Object {
+  "error": "Unauthorized",
+  "message": "Email or/and password are wrong",
+  "statusCode": 401,
+}
+`;
+
+exports[`AppController signup should return token and user object with role, name, and email 1`] = `
+Object {
+  "_id": "1",
+  "email": "aa@test.com",
+  "name": "a cool name",
+  "password": undefined,
+  "role": "user",
+}
+`;

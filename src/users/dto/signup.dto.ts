@@ -1,8 +1,8 @@
-import { IsString, Max, Min, Matches, IsEmail } from 'class-validator';
-import { passwordRegex } from 'src/common/config/regex-contstants';
+import { IsString, Matches, IsEmail, MaxLength, MinLength } from 'class-validator';
+import { passwordRegex } from '../../common/constants/regex-contstants';
 
 export class SignupDto {
-    @IsString() @Max(20) @Min(3) readonly name!: string;
+    @IsString() @MaxLength(20) @MinLength(3) readonly name!: string;
     @IsEmail() readonly email!: string;
     @Matches(passwordRegex) readonly password!: string;
 }

@@ -2,93 +2,111 @@ import {
     Get,
     Controller,
     Post,
-    HttpCode,
     Param,
     Put,
     Body,
-    // UseInterceptors,
     UseGuards,
-    ForbiddenException,
-    Res,
-    Response,
-    Req,
-    Request,
     UseInterceptors,
-    // ConflictException,
-    // UsePipes,
+    ConflictException,
+    UsePipes,
+    ValidationPipe,
+    UnauthorizedException,
+    NotFoundException,
+    Patch,
+    HttpStatus,
+    HttpCode,
 } from '@nestjs/common';
-import { RolesGuard } from 'src/common/guards/roles.guard';
-import { Roles } from 'src/common/decorators/roles.decorator';
 import { SignupDto } from './dto/signup.dto';
-import { UsersService } from './users.service';
+import { UsersDb } from './users.db';
 import { LoginDto } from './dto/login.dto';
-import { LoggingInterceptor } from 'src/common/interceptors/logging.interceptor';
+import { DurationLoggerInterceptor } from '../common/interceptors/duration-logger.interceptor';
+import { clearUnneededDataFromPayload } from './utility/utility-service';
+import { UpdateInfoDto } from './dto/update-info.dto';
+import { ROLES } from '../common/constants/roles-constants';
+import { jwtModule } from '../common/auth/jwt';
+import { hashModule } from '../common/auth/hash';
+import { AllowValidAuthTokenGuard } from '../common/guards/allow-valid-auth-token.guard';
+import { AllowOnlyMyselfGuard } from '../common/guards/allow-only-myself.guard';
+import { AllowOnlyManagersGuard } from '../common/guards/allow-only-managers.guard';
 
 @Controller('api/users')
-@UseGuards(RolesGuard)
-@UseInterceptors(LoggingInterceptor)
+@UseInterceptors(DurationLoggerInterceptor)
 export class UsersController {
-    constructor(private readonly usersService: UsersService) {}
+    constructor(private readonly usersDb: UsersDb) {}
 
-    @Get('hello')
-    getHello(): string {
-        throw new ForbiddenException();
-        return this.usersService.getHello();
-    }
-
-    @Roles('admin')
+    @UseGuards(AllowValidAuthTokenGuard, AllowOnlyManagersGuard)
     @Get('protected')
     protected(): { protected: string } {
         return { protected: 'yeah' };
     }
 
+    @UseGuards(AllowValidAuthTokenGuard, AllowOnlyManagersGuard)
+    @Patch(':id/upgradeRole')
+    async upgradeRole(@Param() params: { id: string }) {
+        const user = await this.usersDb.updateRole(params.id, ROLES.manager);
+        if (!user) {
+            throw new NotFoundException('User does not exist');
+        }
+        return { updated: true };
+    }
+
+    @UseGuards(AllowValidAuthTokenGuard, AllowOnlyMyselfGuard)
     @Get(':id/info')
-    getUserInfo(@Param() params: { id: string }) {
-        return params.id;
+    async getUserInfo(@Param() params: { id: string }) {
+        const user = await this.usersDb.getUserById(params.id);
+        if (!user) {
+            throw new NotFoundException('User does not exist');
+        }
+        return clearUnneededDataFromPayload(user);
     }
 
+    @UseGuards(AllowValidAuthTokenGuard, AllowOnlyMyselfGuard)
     @Put(':id/info')
-    updateUserInfo(@Param() params: { id: string }) {
-        return params.id;
+    @UsePipes(ValidationPipe)
+    async updateUserInfo(@Param() params: { id: string }, @Body() updateInfoDto: UpdateInfoDto) {
+        const user = await this.usersDb.updateUserInfo(params.id, updateInfoDto.name, updateInfoDto.email);
+        if (!user) {
+            throw new NotFoundException('User does not exist');
+        } else {
+            return { updated: true };
+        }
     }
 
-    @HttpCode(204)
     @Post()
-    // @UsePipes(new JoiValidationPipe(createCatSchema))
+    @UsePipes(ValidationPipe)
     async signup(@Body() signupDto: SignupDto) {
-        return this.usersService.signup(signupDto);
-        // throw new ConflictException();
-        // // UnsupportedMediaTypeException
-        // // UnprocessableEntityException
-        // return signupDto;
+        try {
+            const user = await this.usersDb.createUser(
+                signupDto.name,
+                signupDto.email,
+                await hashModule.hash(signupDto.password),
+                ROLES.regular,
+            );
+            return { user: clearUnneededDataFromPayload(user), token: jwtModule.sign(user._id, user.role) };
+        } catch (e) {
+            if (e.code === 11000) {
+                throw new ConflictException('Email already exists');
+            } else {
+                throw e;
+            }
+        }
     }
 
-    @HttpCode(204)
     @Post('login')
-    // @UsePipes(new JoiValidationPipe(createCatSchema))
-    async login(@Body() loginDto: LoginDto, @Res() res: Response, @Req() request: Request) {
-        console.log('a', loginDto);
-        return res.json();
-        // console.log('req', request)
-        // res.status(32)
-        // return this.usersService.getUserByEmail(loginDto.email)
-
-        // .then(user => {
-        //     if (!user) {
-        //         return res.status(401).json({ code: 2, msg: loginErr.message })
-        //     }
-        //     return comparePassword(req.body.password, user.password).then(ok => {
-        //         if (!ok) return res.status(401).json({ code: 2, msg: loginErr.message })
-        //         return res.status(200).json({ user: clearUnneededDataFromPayload(user), token: getToken(user._id, user.role) })
-        //     }).catch(err => next(err))
-        // // throw new ConflictException();
-        // // // UnsupportedMediaTypeException
-        // // // UnprocessableEntityException
-        // // return signupDto;
-    }
-
-    @Get()
-    findAll() {
-        return 'This action returns all cats';
+    @HttpCode(HttpStatus.OK)
+    @UsePipes(ValidationPipe)
+    async login(@Body() loginDto: LoginDto) {
+        const wrongCredentialsMessage = 'Email or/and password are wrong';
+        const user = await this.usersDb.getUserByEmail(loginDto.email);
+        if (!user) {
+            throw new UnauthorizedException(wrongCredentialsMessage);
+        } else {
+            const isPasswordRight = await hashModule.isPasswordRight(loginDto.password, user.password);
+            if (!isPasswordRight) {
+                throw new UnauthorizedException(wrongCredentialsMessage);
+            } else {
+                return { user: clearUnneededDataFromPayload(user), token: jwtModule.sign(user._id, user.role) };
+            }
+        }
     }
 }
